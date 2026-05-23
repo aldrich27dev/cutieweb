@@ -18,7 +18,7 @@ export default function LoveLetterStep({ onNext }) {
           <p>- Aldrich</p>
         </div>
         <button 
-          onClick={onNext}
+          onClick={onNext}  
           className="w-full bg-pink-500 hover:bg-pink-600 py-3 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2"
         >
           <Heart size={18} /> Continue to Celebration!
