@@ -1,50 +1,50 @@
 import { motion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
-const flowers = ["🌷", "🌹", "🌻", "🌸", "💐", "🌺"];
+const flowers = ["flower", "rose", "sun", "blossom", "spark", "petal"];
 
 export default function FlowerBouquet({ onComplete }) {
+  const bouquet = useMemo(
+    () =>
+      flowers.map((flower, index) => ({
+        id: flower,
+        x: (index - 2.5) * 120,
+        y: (index % 2 === 0 ? -1 : 1) * 80,
+        delay: index * 0.2,
+      })),
+    [],
+  );
+
   useEffect(() => {
     const timer = setTimeout(onComplete, 4000);
     return () => clearTimeout(timer);
   }, [onComplete]);
 
   return (
-    <div className="relative h-dvh w-full bg-slate-950 overflow-hidden flex items-center justify-center">
-      {/* Bouquet */}
-      {flowers.map((flower, i) => (
+    <div className="flex h-dvh items-center justify-center overflow-hidden bg-slate-950">
+      {bouquet.map((item) => (
         <motion.div
-          key={i}
-          initial={{ 
-            x: (Math.random() - 0.5) * 600, 
-            y: (Math.random() - 0.5) * 600, 
-            scale: 0 
-          }}
-          animate={{ 
-            x: 0, 
-            y: 0, 
-            scale: 2, 
-            rotate: 360 
-          }}
-          transition={{ 
-            duration: 2, 
-            delay: i * 0.2, 
-            ease: "backOut" 
+          key={item.id}
+          initial={{ x: item.x, y: item.y, scale: 0 }}
+          animate={{ x: 0, y: 0, scale: 2, rotate: 360 }}
+          transition={{
+            duration: 2,
+            delay: item.delay,
+            ease: "backOut",
           }}
           className="absolute text-4xl"
         >
-          {flower}
+          *
         </motion.div>
       ))}
-      
-      {/* Label at the bottom */}
-      <motion.div 
-        initial={{ opacity: 0 }} 
-        animate={{ opacity: 1 }}        
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         transition={{ delay: 2.5 }}
-        className="absolute bottom-70 left-0 w-full text-center text-white text-xl font-bold z-[9]"
+        className="absolute bottom-[70px] left-0 z-[9] w-full text-center text-xl font-bold text-white"
       >
-        Para sa'yo... 💐
+        For you
       </motion.div>
     </div>
   );

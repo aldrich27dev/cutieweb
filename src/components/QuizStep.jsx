@@ -1,87 +1,193 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Lock, AlertCircle, CheckCircle2, ShieldAlert, Info } from "lucide-react";
 
 export default function QuizStep({ onNext }) {
-  const [answers, setAnswers] = useState({ bday: "", color: "", music: "" });
+  const CORRECT_PIN = "111826"; 
+  const MAX_ATTEMPTS = 6;
+  const LOCKOUT_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+  const [pin, setPin] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState(false);
   const [showCongrats, setShowCongrats] = useState(false);
+  const [showWarning, setShowWarning] = useState(false); // Default to false
+  const [attempts, setAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const inputRefs = useRef([]);
 
-  const correctAnswers = { bday: "05-27", color: "black", music: "bruno mars" };
-  const today = new Date().toISOString().split('T')[0];
+  useEffect(() => {
+    // Check if user already saw the warning
+    const hasSeenWarning = localStorage.getItem("pin_warning_seen");
+    if (!hasSeenWarning) {
+      setShowWarning(true);
+    }
+
+    const savedAttempts = parseInt(localStorage.getItem("pin_attempts") || "0");
+    const lockTime = localStorage.getItem("lock_time");
+
+    if (lockTime) {
+      const timeElapsed = Date.now() - parseInt(lockTime);
+      if (timeElapsed < LOCKOUT_TIME) {
+        setIsLocked(true);
+        setTimeout(() => {
+          setIsLocked(false);
+          localStorage.removeItem("lock_time");
+          localStorage.removeItem("pin_attempts");
+          setAttempts(0);
+        }, LOCKOUT_TIME - timeElapsed);
+      } else {
+        localStorage.removeItem("lock_time");
+        localStorage.removeItem("pin_attempts");
+      }
+    }
+    setAttempts(savedAttempts);
+  }, []);
+
+  const handleUnderstood = () => {
+    localStorage.setItem("pin_warning_seen", "true");
+    setShowWarning(false);
+  };
+
+  const handleChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newPin = [...pin];
+    newPin[index] = value;
+    setPin(newPin);
+    if (value && index < 5) inputRefs.current[index + 1].focus();
+  };
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !pin[index] && index > 0) {
+      inputRefs.current[index - 1].focus();
+    }
+  };
 
   const handleSubmit = () => {
-    if (answers.bday.endsWith(correctAnswers.bday) && answers.color.toLowerCase() === correctAnswers.color && answers.music.toLowerCase() === correctAnswers.music) {
+    if (isLocked) return;
+
+    const fullPin = pin.join("");
+    if (fullPin === CORRECT_PIN) {
+      localStorage.removeItem("pin_attempts");
+      localStorage.removeItem("lock_time");
       setShowCongrats(true);
     } else {
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+      localStorage.setItem("pin_attempts", newAttempts.toString());
+      
+      if (newAttempts >= MAX_ATTEMPTS) {
+        setIsLocked(true);
+        localStorage.setItem("lock_time", Date.now().toString());
+        setTimeout(() => {
+          setIsLocked(false);
+          localStorage.removeItem("lock_time");
+          localStorage.removeItem("pin_attempts");
+          setAttempts(0);
+        }, LOCKOUT_TIME);
+      }
+      
       setError(true);
+      setPin(["", "", "", "", "", ""]);
+      inputRefs.current[0].focus();
       setTimeout(() => setError(false), 500);
     }
   };
 
   return (
-    <div className="flex h-dvh items-center justify-center p-6">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-slate-900/80 p-8 rounded-3xl border border-slate-700 w-full max-w-sm text-center">
-        <Sparkles className="mx-auto text-yellow-400 mb-4" size={32} />
-        <h2 className="text-2xl font-bold mb-6 text-white">Prove you're HER! ✨</h2>
-        
-        <div className="space-y-4 text-left">
-          {/* Birthday */}
-          <div>
-            <label className="text-sm text-slate-400 block mb-1">When is my incoming birthday? 🎂</label>
-            <input type="date" min={today} className="w-full bg-slate-950 p-3 rounded-xl [color-scheme:dark] border border-slate-700 outline-none focus:border-pink-500" onChange={(e) => setAnswers({...answers, bday: e.target.value})} />
-          </div>
-          
-          {/* Color */}
-          <div>
-            <label className="text-sm text-slate-400 block mb-1">Whats my fav colour? 🎨</label>
-            <input className="w-full bg-slate-950 p-3 rounded-xl border border-slate-700 outline-none focus:border-pink-500" placeholder="kahit isa lang" onChange={(e) => setAnswers({...answers, color: e.target.value})} />
-          </div>
-          
-          {/* Music */}
-          <div>
-            <label className="text-sm text-slate-400 block mb-1">Whos my fav music artist? 🎧</label>
-            <input className="w-full bg-slate-950 p-3 rounded-xl border border-slate-700 outline-none focus:border-pink-500" placeholder="kahit isa lang din" onChange={(e) => setAnswers({...answers, music: e.target.value})} />
-          </div>
+    <div className="flex h-dvh items-center justify-center p-6 bg-slate-950">
+      <motion.div 
+        animate={error ? { x: [-10, 10, -10, 10, 0] } : {}}
+        transition={{ duration: 0.3 }}
+        className="bg-slate-900/50 p-8 rounded-[32px] border border-white/10 w-full max-w-sm text-center backdrop-blur-xl shadow-2xl"
+      >
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-pink-500/10 text-pink-400 mb-6">
+          <Lock size={32} />
         </div>
+        
+        <h2 className="text-xl font-bold text-white mb-2">
+          {isLocked ? "Access Denied" : "Enter Access PIN"}
+        </h2>
 
-        {error && <p className="text-red-400 mt-4 flex items-center justify-center gap-2"><AlertCircle size={16}/> Oops! Mali yata... ❌</p>}
+        {isLocked ? (
+          <div className="text-red-400 p-4 border border-red-900/50 rounded-2xl bg-red-950/20 flex flex-col items-center">
+            <ShieldAlert size={40} className="mb-2" />
+            <p className="text-sm font-medium">Too many attempts. Wait 30 minutes.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-slate-400 text-sm mb-8">Attempt {attempts}/{MAX_ATTEMPTS}</p>
+            <div className="flex justify-center gap-2 mb-6">
+              {pin.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  type="text"
+                  inputMode="numeric" 
+                  pattern="[0-9]*"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleChange(index, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  className="w-10 h-14 bg-slate-950 border border-white/10 rounded-xl text-center text-xl font-bold text-white focus:border-pink-500 outline-none transition-all"
+                />
+              ))}
+            </div>
 
-        <button onClick={handleSubmit} className="w-full mt-6 bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 rounded-xl font-bold">Check Answers ✅</button>
+            {error && (
+              <p className="text-red-400 text-xs flex items-center justify-center gap-2 mb-4">
+                <AlertCircle size={14}/> Invalid Code!
+              </p>
+            )}
+
+            <button 
+              onClick={handleSubmit} 
+              className="w-full bg-white text-slate-950 py-3.5 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+            >
+              Unlock Space
+            </button>
+          </>
+        )}
       </motion.div>
+
+      {/* WARNING MODAL */}
+      <AnimatePresence>
+        {showWarning && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+              className="bg-slate-900 p-8 rounded-3xl text-center border border-white/10 w-full max-w-xs"
+            >
+              <Info className="text-amber-400 mx-auto mb-4" size={48} />
+              <h2 className="text-xl font-bold text-white mb-2">Important Notice</h2>
+              <p className="text-slate-400 text-sm mb-6">
+                Please enter the correct PIN. If you exceed the maximum attempts, you will be locked out for <span className="text-white font-bold">30 minutes</span>.
+              </p>
+              <button onClick={handleUnderstood} className="w-full bg-pink-600 text-white py-3 rounded-xl font-bold">Understood</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
-  {showCongrats && (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md"
-    >
-      <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.8, opacity: 0 }}
-        transition={{ type: "spring", damping: 20, stiffness: 300 }}
-        className="bg-slate-900/90 p-8 rounded-3xl text-center border border-green-500/20 shadow-[0_0_50px_rgba(34,197,94,0.1)] w-full max-w-xs"
-      >
-        <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-          <CheckCircle2 className="text-green-400" size={40} />
-        </div>
-        
-        <h2 className="text-3xl font-bold text-white mb-2">Tama ka! ✨</h2>
-        <p className="text-slate-400 mb-6">You know me so well! 🥰</p>
-        
-        <button 
-          onClick={onNext} 
-          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-500/20 transition-all active:scale-95"
-        >
-          Continue! 🚀
-        </button>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+        {showCongrats && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+              className="bg-slate-900 p-8 rounded-3xl text-center border border-white/10 w-full max-w-xs"
+            >
+              <CheckCircle2 className="text-green-400 mx-auto mb-4" size={48} />
+              <h2 className="text-2xl font-bold text-white mb-2">Access Granted</h2>
+              <button onClick={onNext} className="w-full mt-6 bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

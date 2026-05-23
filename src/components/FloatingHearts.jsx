@@ -1,23 +1,35 @@
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 
 export default function FloatingHearts() {
+  const hearts = useMemo(
+    () =>
+      Array.from({ length: 15 }, (_, index) => ({
+        id: index,
+        left: `${(index * 100) / 15}%`,
+        duration: 5 + (index % 5) * 0.8,
+        delay: (index % 5) * 0.6,
+      })),
+    [],
+  );
+
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      {[...Array(15)].map((_, i) => (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      {hearts.map((heart) => (
         <motion.div
-          key={i}
+          key={heart.id}
           initial={{ y: "100vh", opacity: 0 }}
           animate={{ y: "-10vh", opacity: [0, 1, 1, 0] }}
           transition={{
-            duration: Math.random() * 5 + 5,
+            duration: heart.duration,
             repeat: Infinity,
-            delay: Math.random() * 5,
+            delay: heart.delay,
             ease: "linear",
           }}
-          className="absolute text-pink-500/20 text-2xl"
-          style={{ left: `${Math.random() * 100}%` }}
+          className="absolute text-2xl text-pink-500/20"
+          style={{ left: heart.left }}
         >
-          ❤️
+          &hearts;
         </motion.div>
       ))}
     </div>
