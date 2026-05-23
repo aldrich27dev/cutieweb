@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, AlertCircle, CheckCircle2, ShieldAlert, Info } from "lucide-react";
 
+const LOCKOUT_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 export default function QuizStep({ onNext }) {
   const CORRECT_PIN = "111825"; 
   const MAX_ATTEMPTS = 6;
-  const LOCKOUT_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   const [pin, setPin] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState(false);
@@ -16,31 +17,35 @@ export default function QuizStep({ onNext }) {
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    // Check if user already saw the warning
-    const hasSeenWarning = localStorage.getItem("pin_warning_seen");
-    if (!hasSeenWarning) {
-      setShowWarning(true);
-    }
+    const timer = setTimeout(() => {
+      // Check if user already saw the warning
+      const hasSeenWarning = localStorage.getItem("pin_warning_seen");
+      if (!hasSeenWarning) {
+        setShowWarning(true);
+      }
 
-    const savedAttempts = parseInt(localStorage.getItem("pin_attempts") || "0");
-    const lockTime = localStorage.getItem("lock_time");
+      const savedAttempts = parseInt(localStorage.getItem("pin_attempts") || "0");
+      const lockTime = localStorage.getItem("lock_time");
 
-    if (lockTime) {
-      const timeElapsed = Date.now() - parseInt(lockTime);
-      if (timeElapsed < LOCKOUT_TIME) {
-        setIsLocked(true);
-        setTimeout(() => {
-          setIsLocked(false);
+      if (lockTime) {
+        const timeElapsed = Date.now() - parseInt(lockTime);
+        if (timeElapsed < LOCKOUT_TIME) {
+          setIsLocked(true);
+          setTimeout(() => {
+            setIsLocked(false);
+            localStorage.removeItem("lock_time");
+            localStorage.removeItem("pin_attempts");
+            setAttempts(0);
+          }, LOCKOUT_TIME - timeElapsed);
+        } else {
           localStorage.removeItem("lock_time");
           localStorage.removeItem("pin_attempts");
-          setAttempts(0);
-        }, LOCKOUT_TIME - timeElapsed);
-      } else {
-        localStorage.removeItem("lock_time");
-        localStorage.removeItem("pin_attempts");
+        }
       }
-    }
-    setAttempts(savedAttempts);
+      setAttempts(savedAttempts);
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const handleUnderstood = () => {
@@ -154,7 +159,7 @@ export default function QuizStep({ onNext }) {
         {showWarning && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
           >
             <motion.div 
               initial={{ scale: 0.9 }} animate={{ scale: 1 }}
@@ -175,7 +180,7 @@ export default function QuizStep({ onNext }) {
         {showCongrats && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
           >
             <motion.div 
               initial={{ scale: 0.9 }} animate={{ scale: 1 }}

@@ -41,7 +41,7 @@ function buildCalendarLink(dateInfo) {
     "See you soon.",
   ].join("\n");
 
-  return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(dateInfo.place)}&dates=${start}/${end}`;
+  return `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(dateInfo.place)}&dates=${start}/${end}`;
 }
 
 export default function CelebrationStep({ dateInfo, onReset, onFinalize }) {
@@ -92,6 +92,11 @@ export default function CelebrationStep({ dateInfo, onReset, onFinalize }) {
     } catch (error) {
       console.error("Copy failed:", error);
     }
+  };
+
+  const handleOpenCalendar = () => {
+    if (!calendarLink || calendarLink === "#") return;
+    window.open(calendarLink, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -146,15 +151,14 @@ export default function CelebrationStep({ dateInfo, onReset, onFinalize }) {
         </div>
 
         <div className="mb-4">
-          <a
-            href={calendarLink}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={handleOpenCalendar}
             className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-500 px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95"
           >
             <Sparkles size={16} />
             Open Google Calendar
-          </a>
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

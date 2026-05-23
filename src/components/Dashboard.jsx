@@ -2,10 +2,11 @@
 // FILE PATH: src/components/Dashboard.jsx
 
 import { useState } from "react";
-import { Heart, Info, X, CalendarDays, PartyPopper, CheckCircle2 } from "lucide-react";
+import { Heart, Info, X, CalendarDays, CheckCircle2, CalendarClock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import PendingDates from "./PendingDates";
 import MemoryGallery from "./MemoryGallery";
+import CancelledDates from "./CancelledDates";
 
 export default function Dashboard({ onPlanDate, onCelebrate }) {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -26,8 +27,8 @@ export default function Dashboard({ onPlanDate, onCelebrate }) {
       {/* HEADER SECTION */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Control Room</h1>
-          <p className="text-slate-400 text-sm mt-1">Our shared space for memories and plans.</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Hi, Baby!</h1>
+          <p className="text-slate-400 text-sm mt-1">This is our shared space for memories and plans.</p>
         </div>
         <button 
           onClick={() => setShowAbout(true)}
@@ -44,11 +45,11 @@ export default function Dashboard({ onPlanDate, onCelebrate }) {
           <span className="text-xs font-semibold text-white">Plan Date</span>
         </button>
         <button 
-          onClick={() => setShowConfirm(true)} 
-          className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/10 border border-purple-500/20 hover:border-purple-500/40 transition"
+          onClick={onPlanDate} 
+          className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-blue-500/10 border border-indigo-500/20 hover:border-indigo-500/40 transition"
         >
-          <PartyPopper className="text-purple-400 mb-2" size={24} />
-          <span className="text-xs font-semibold text-white">Celebrate</span>
+          <CalendarClock className="text-indigo-400 mb-2" size={24} />
+          <span className="text-xs font-semibold text-white">Reschedule</span>
         </button>
       </div>
 
@@ -56,12 +57,13 @@ export default function Dashboard({ onPlanDate, onCelebrate }) {
       <div className="space-y-6">
         <PendingDates onStatusChange={triggerDataSync} key={`pending-${refreshKey}`} />
         <MemoryGallery key={`gallery-${refreshKey}`} onUploadSuccess={triggerDataSync} />
+        <CancelledDates key={`cancelled-${refreshKey}`} />
       </div>
 
       {/* ABOUT MODAL */}
       <AnimatePresence>
         {showAbout && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -85,7 +87,7 @@ export default function Dashboard({ onPlanDate, onCelebrate }) {
       {/* CELEBRATION CONFIRMATION MODAL */}
       <AnimatePresence>
         {showConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}

@@ -96,6 +96,22 @@ function createSupabaseClient({
       return this.updateDate(id, { status });
     },
 
+    async cancelDate(id, cancellationReason) {
+      return this.updateDate(id, {
+        status: "cancelled",
+        cancellation_reason: cancellationReason,
+      });
+    },
+
+    async deleteDate(id) {
+      return requestJson(baseUrl, anonKey, `${table}?id=eq.${id}`, {
+        method: "DELETE",
+        headers: {
+          Prefer: "return=representation",
+        },
+      });
+    },
+
     // 🚀 NEW FEATURE: Native direct fetch implementation para sa Supabase Storage Bucket Upload engine
     async uploadMemoryFile(bucketName, filePath, fileObject) {
       if (!baseUrl || !anonKey) throw new Error("Supabase configuration block missing.");

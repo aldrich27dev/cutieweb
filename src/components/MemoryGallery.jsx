@@ -1,13 +1,140 @@
 // TYPE: Media Asset Cloud Inventory Viewer with Target Date Selection
 // FILE PATH: src/components/MemoryGallery.jsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ImagePlus, RefreshCcw, Sparkles, Loader2, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabaseClient } from "../supabaseClient";
 
 function fallBackCaption(item) {
   return item.caption || item.place || "A saved memory";
+}
+
+function parseSafeDate(dateString) {
+  if (!dateString) return null;
+  const parsed = new Date(`${dateString}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatMonthLabel(date) {
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function getWeekStart(date) {
+  const normalized = new Date(date);
+  const day = normalized.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  normalized.setDate(normalized.getDate() + diff);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function getWeekEnd(date) {
+  const start = getWeekStart(date);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return end;
+}
+
+function formatWeekLabel(date) {
+  const start = getWeekStart(date);
+  const end = getWeekEnd(date);
+  const monthName = start.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const range = sameMonth
+    ? `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("en-US", { day: "numeric", year: "numeric" })}`
+    : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+
+  return `${monthName}, Week ${getWeekNumber(date)} (${range})`;
+}
+
+function getWeekNumber(date) {
+  const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const firstMondayOffset = startOfMonth.getDay() === 0 ? 1 : (8 - startOfMonth.getDay()) % 7;
+  const firstMonday = new Date(startOfMonth);
+  firstMonday.setDate(startOfMonth.getDate() + firstMondayOffset);
+  const targetWeekStart = getWeekStart(date);
+  const diffMs = targetWeekStart - getWeekStart(firstMonday);
+  const diffWeeks = Math.max(0, Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)));
+  return diffWeeks + 1;
+}
+
+function buildDateBuckets(dates) {
+  const monthMap = new Map();
+  const weekMap = new Map();
+
+  dates.forEach((item) => {
+    const parsed = parseSafeDate(item.date);
+    if (!parsed) return;
+
+    const monthKey = `${parsed.getFullYear()}-${parsed.getMonth()}`;
+    if (!monthMap.has(monthKey)) {
+      monthMap.set(monthKey, {
+        value: monthKey,
+        label: formatMonthLabel(parsed),
+      });
+    }
+
+    const weekStart = getWeekStart(parsed);
+    const weekEnd = getWeekEnd(parsed);
+    const weekKey = `${weekStart.getFullYear()}-${weekStart.getMonth()}-${weekStart.getDate()}`;
+    if (!weekMap.has(weekKey)) {
+      weekMap.set(weekKey, {
+        value: weekKey,
+        label: formatWeekLabel(parsed),
+        monthKey,
+        weekStart,
+        weekEnd,
+      });
+    }
+  });
+
+  return {
+    months: Array.from(monthMap.values()),
+    weeks: Array.from(weekMap.values()),
+  };
+}
+
+function filterDatesByBucket(dates, filterMode, filterValue) {
+  if (!filterMode || !filterValue) return dates;
+
+  return dates.filter((item) => {
+    const parsed = parseSafeDate(item.date);
+    if (!parsed) return false;
+
+    if (filterMode === "month") {
+      return `${parsed.getFullYear()}-${parsed.getMonth()}` === filterValue;
+    }
+
+    if (filterMode === "week") {
+      const weekStart = getWeekStart(parsed);
+      return `${weekStart.getFullYear()}-${weekStart.getMonth()}-${weekStart.getDate()}` === filterValue;
+    }
+
+    return true;
+  });
+}
+
+function countImagesForDateId(memories, dateId) {
+  return memories.reduce((total, memory) => {
+    const linkedDateId = memory.date_id ?? memory.id;
+    if (String(linkedDateId) !== String(dateId)) return total;
+
+    return total + parseImages(memory.image_url).length;
+  }, 0);
+}
+
+function getCurrentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth()}`;
+}
+
+function getCurrentWeekKey() {
+  const now = getWeekStart(new Date());
+  return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
 }
 
 // Helper para ligtas na ma-parse ang single string o JSON string array ng images
@@ -21,6 +148,60 @@ function parseImages(imageUrlString) {
     }
   }
   return [imageUrlString];
+}
+
+function compressImage(file, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("Failed to read image file."));
+    reader.onload = () => {
+      const image = new Image();
+
+      image.onerror = () => reject(new Error("Failed to load image for compression."));
+      image.onload = () => {
+        const maxWidth = 1200;
+        const scale = Math.min(1, maxWidth / image.width);
+        const width = Math.round(image.width * scale);
+        const height = Math.round(image.height * scale);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Canvas context unavailable."));
+          return;
+        }
+
+        context.drawImage(image, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Unable to compress image."));
+              return;
+            }
+
+            const safeName = file.name.replace(/\.[^.]+$/, "") || "image";
+            const compressedFile = new File([blob], `${safeName}.jpg`, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality,
+        );
+      };
+
+      image.src = reader.result;
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function MemoryGallery() {
@@ -38,10 +219,13 @@ export default function MemoryGallery() {
   const [isCustomRow, setIsCustomRow] = useState(false);
   const [manualDate, setManualDate] = useState("");
   const [manualPlace, setManualPlace] = useState("");
+  const [dateFilterMode, setDateFilterMode] = useState("month");
+  const [dateFilterValue, setDateFilterValue] = useState("");
 
   // Lightbox Modal para sa pagpapakita ng carousel ng larawan kapag klinik
   const [activeLightbox, setActiveLightbox] = useState(null);
   const [lightboxImageIndex, setLightboxImageIndex] = useState(0);
+  const { months, weeks } = useMemo(() => buildDateBuckets(availableDates), [availableDates]);
 
   const loadMemories = async () => {
     setLoading(true);
@@ -73,9 +257,31 @@ export default function MemoryGallery() {
   };
 
   useEffect(() => {
-    void loadMemories();
-    void loadAvailableDates();
+    const timer = setTimeout(() => {
+      void loadMemories();
+      void loadAvailableDates();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (dateFilterMode === "month" && !dateFilterValue && months.length > 0) {
+        const currentMonth = getCurrentMonthKey();
+        const preferredMonth = months.find((item) => item.value === currentMonth)?.value || months[0].value;
+        setDateFilterValue(preferredMonth);
+      }
+
+      if (dateFilterMode === "week" && !dateFilterValue && weeks.length > 0) {
+        const currentWeek = getCurrentWeekKey();
+        const preferredWeek = weeks.find((item) => item.value === currentWeek)?.value || weeks[0].value;
+        setDateFilterValue(preferredWeek);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [dateFilterMode, dateFilterValue, months, weeks]);
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files ?? []);
@@ -94,37 +300,65 @@ export default function MemoryGallery() {
     setError("");
     
     try {
-      const uploadedUrls = [];
+      const compressedFiles = [];
 
       for (const file of selectedFiles) {
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${crypto.randomUUID()}.${fileExt}`;
-        const filePath = `uploads/${fileName}`;
-
-        const uploadResult = await supabaseClient.uploadMemoryFile("memories", filePath, file);
-        if (uploadResult?.publicUrl) {
-          uploadedUrls.push(uploadResult.publicUrl);
-        }
+        const compressedFile = await compressImage(file, 0.7);
+        compressedFiles.push(compressedFile);
       }
 
-      const finalImageUrlString = JSON.stringify(uploadedUrls);
-
       if (isCustomRow || selectedDateId === "new_standalone") {
+        const uploadedUrls = [];
+
+        for (const file of compressedFiles) {
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${crypto.randomUUID()}.${fileExt}`;
+          const filePath = `uploads/${fileName}`;
+
+          const uploadResult = await supabaseClient.uploadMemoryFile("memories", filePath, file);
+          if (uploadResult?.publicUrl) {
+            uploadedUrls.push(uploadResult.publicUrl);
+          }
+        }
+
         await supabaseClient.insertDate({
           date: manualDate || new Date().toISOString().split("T")[0],
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
           place: manualPlace || "Captured Moment 📍",
           status: "completed",
-          image_url: finalImageUrlString,
+          image_url: JSON.stringify(uploadedUrls),
           caption: customCaption || "Isang masayang alaala! ❤️"
         });
       } else {
         const targetEvent = availableDates.find(d => String(d.id) === String(selectedDateId));
         if (!targetEvent) throw new Error("Selected target timeline point target missing allocation metadata.");
 
+        const existingImages = parseImages(targetEvent.image_url);
+        const totalAfterUpload = existingImages.length + compressedFiles.length;
+
+        if (totalAfterUpload > 3) {
+          alert("This date already has the maximum of 3 images.");
+          return;
+        }
+
+        const uploadedUrls = [];
+
+        for (const file of compressedFiles) {
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${crypto.randomUUID()}.${fileExt}`;
+          const filePath = `uploads/${fileName}`;
+
+          const uploadResult = await supabaseClient.uploadMemoryFile("memories", filePath, file);
+          if (uploadResult?.publicUrl) {
+            uploadedUrls.push(uploadResult.publicUrl);
+          }
+        }
+
+        const mergedImages = [...existingImages, ...uploadedUrls].slice(0, 3);
+
         await supabaseClient.updateDate(selectedDateId, {
           status: "completed",
-          image_url: finalImageUrlString,
+          image_url: JSON.stringify(mergedImages),
           caption: customCaption || targetEvent.place || "Date night successfully logged! 💕"
         });
       }
@@ -156,8 +390,10 @@ export default function MemoryGallery() {
     setLightboxImageIndex((prev) => (prev - 1 + imgsCount) % imgsCount);
   };
 
+  const filteredAvailableDates = filterDatesByBucket(availableDates, dateFilterMode, dateFilterValue);
+  const todayString = new Date().toISOString().slice(0, 10);
   return (
-    <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_90px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+    <section className="relative z-20 rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_90px_rgba(15,23,42,0.45)] backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-purple-200/70">Memory Gallery</p>
@@ -257,7 +493,7 @@ export default function MemoryGallery() {
 
       {/* DYNAMIC SELECTION OVERLAY CONTROL FOR CONFIRMING ACTIONS */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
           <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -282,29 +518,85 @@ export default function MemoryGallery() {
 
             <form onSubmit={handleUploadSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-2">
+                <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-slate-300">
                   Assign to which planned date target?
                 </label>
-                <select
-                  required
-                  className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-sm text-white focus:outline-none focus:border-pink-500 transition-colors [color-scheme:dark]"
-                  value={selectedDateId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedDateId(val);
-                    setIsCustomRow(val === "new_standalone");
-                  }}
-                >
-                  <option value="" disabled>-- Choose a designated date match --</option>
-                  {availableDates
-                    .filter((d) => d.status !== "cancelled")
-                    .map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.date} · {d.place || "Unnamed Location"} ({d.status})
+
+                <div className="grid gap-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                    onClick={() => {
+                      setDateFilterMode("month");
+                        setDateFilterValue(months.find((item) => item.value === getCurrentMonthKey())?.value || months[0]?.value || "");
+                        setSelectedDateId("");
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                        dateFilterMode === "month"
+                          ? "border-pink-500/40 bg-pink-500/10 text-pink-200"
+                          : "border-white/10 bg-slate-950 text-slate-300 hover:bg-white/5"
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                    onClick={() => {
+                      setDateFilterMode("week");
+                        setDateFilterValue(weeks.find((item) => item.value === getCurrentWeekKey())?.value || weeks[0]?.value || "");
+                        setSelectedDateId("");
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                        dateFilterMode === "week"
+                          ? "border-pink-500/40 bg-pink-500/10 text-pink-200"
+                          : "border-white/10 bg-slate-950 text-slate-300 hover:bg-white/5"
+                      }`}
+                    >
+                      Weekly
+                    </button>
+                  </div>
+
+                  <select
+                    className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-sm text-white outline-none transition-colors focus:border-pink-500 [color-scheme:dark]"
+                    value={dateFilterValue}
+                    onChange={(e) => {
+                      setDateFilterValue(e.target.value);
+                      setSelectedDateId("");
+                    }}
+                  >
+                    <option value="">
+                      {dateFilterMode === "week" ? "All weeks" : "All months"}
+                    </option>
+                    {(dateFilterMode === "week" ? weeks : months).map((group) => (
+                      <option key={group.value} value={group.value}>
+                        {group.label}
                       </option>
                     ))}
-                  <option value="new_standalone">+ Create brand new manual gallery spot</option>
-                </select>
+                  </select>
+
+                  <select
+                    required
+                    className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-sm text-white outline-none transition-colors focus:border-pink-500 [color-scheme:dark]"
+                    value={selectedDateId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedDateId(val);
+                      setIsCustomRow(val === "new_standalone");
+                    }}
+                  >
+                    <option value="" disabled>
+                      -- Choose a designated date match --
+                    </option>
+                    {filteredAvailableDates
+                      .filter((d) => d.status !== "cancelled" && countImagesForDateId(memories, d.id) < 3)
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.date} · {d.place || "Unnamed Location"} ({d.status})
+                        </option>
+                      ))}
+                    <option value="new_standalone">+ Create brand new manual gallery spot</option>
+                  </select>
+                </div>
               </div>
 
               {isCustomRow && (
@@ -376,7 +668,7 @@ export default function MemoryGallery() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setActiveLightbox(null)}
-              className="fixed inset-0 z-50 flex flex-col justify-between bg-slate-950/98 backdrop-blur-3xl p-4 md:p-6"
+              className="fixed inset-0 z-[210] flex flex-col justify-between bg-slate-950/98 backdrop-blur-3xl p-4 md:p-6"
             >
               {/* TOP HEADER CONTROLS */}
               <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4 z-20 pt-2">
