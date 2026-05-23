@@ -1,32 +1,59 @@
 import Confetti from "react-confetti";
 import { motion } from "framer-motion";
-import { Calendar, Clock, MapPin, Copy, RefreshCcw, Check, Plus } from "lucide-react";
-import { useState } from "react";
+import { Calendar, Clock, MapPin, Copy, RefreshCcw, Check, Sparkles, Send, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import emailjs from "@emailjs/browser";
 
 export default function CelebrationStep({ dateInfo, onReset }) {
   const [copied, setCopied] = useState(false);
-  
-  // Dito pupunta ang notification at email galing sa Google Calendar account niya
+  const [emailStatus, setEmailStatus] = useState("sending"); // "sending", "sent", "error"
+  const hasSent = useRef(false);
+
   const myEmail = "aldrichhcirdla27@gmail.com"; 
 
-  // PINAG-ISANG LINK: Google Calendar Invite na magpuforce ng Email Notification sa iyo
+  // 1. AUTOMATIC BACKGROUND EMAIL (EmailJS) - Pagkabukas pa lang ng screen, send agad sa'yo!
+  useEffect(() => {
+    if (hasSent.current) return;
+    hasSent.current = true;
+
+    // TODO: Siguraduhing tama ang IDs mo rito mula sa EmailJS dashboard
+   const SERVICE_ID = "service_pkg397f";
+    const TEMPLATE_ID = "template_idjc3wh";
+     const PUBLIC_KEY = "qOeLZ1xczgS3nqbBw";
+
+    const templateParams = {
+      my_email: myEmail,
+      date: dateInfo.date,
+      time: dateInfo.time,
+      place: dateInfo.place,
+      message: "Yown! Confirmed na 'yung date nating dalawa! See you! 🥰"
+    };
+
+    emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY)
+      .then(() => {
+        setEmailStatus("sent");
+      })
+      .catch((error) => {
+        console.error("EmailJS Error:", error);
+        setEmailStatus("error");
+      });
+  }, [dateInfo]);
+
+  // 2. GOOGLE CALENDAR LINK LINK GENERATOR (Para pumasok sa Phone Widget niya)
   const generateGoogleCalendarLink = () => {
-    // I-format ang date at time para sa API standard (YYYYMMDDTHHMMSS)
     const formattedDate = dateInfo.date.replace(/-/g, '');
     const formattedTime = dateInfo.time.replace(/:/g, '');
     const start = `${formattedDate}T${formattedTime}00`;
     
-    // Set automatic end time (default is 2 hours after the start time)
+    // Default duration: 2 hours
     const endHour = parseInt(dateInfo.time.split(':')[0]) + 2;
     const end = `${formattedDate}T${endHour.toString().padStart(2, '0')}${dateInfo.time.split(':')[1]}00`;
     
     const title = "Our Special Date! ❤️";
-    const details = `Can't wait for our date, love!\n\n📅 Date: ${dateInfo.date}\n⏰ Time: ${dateInfo.time}\n📍 Place: ${dateInfo.place}\n\nSee you there! 🥰`;
+    const details = `📅 Date: ${dateInfo.date}\n⏰ Time: ${dateInfo.time}\n📍 Place: ${dateInfo.place}\n\nSee you, baby! 🥰`;
     
-    // CRITICAL API PARAMETERS: 
-    // &add=${myEmail} -> Awtomatikong isasama ang email mo sa "Guests" list ng calendar niya
-    // &sf=true -> Magse-send ng invite email at alert notification sa iyo galing sa account niya pagka-save
-    return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(dateInfo.place)}&dates=${start}/${end}&add=${encodeURIComponent(myEmail)}&sf=true`;
+    // Ininject na natin ang reminders para mag-alarm sa phone widget niya, at tinanggal ang auto-GMeet
+    return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(dateInfo.place)}&dates=${start}/${end}&add=${encodeURIComponent(myEmail)}&sf=true&opp=false&reminders=1m-email,1m-popup&no_gmeet=true`;
   };
 
   const handleCopy = () => {
@@ -45,6 +72,25 @@ export default function CelebrationStep({ dateInfo, onReset }) {
         animate={{ y: 0 }} 
         className="bg-slate-900/80 p-8 rounded-3xl border border-pink-500/30 w-full max-w-sm shadow-2xl backdrop-blur-sm"
       >
+        {/* Silent Status Toast Indicator */}
+        <div className="mb-4 text-xs font-semibold w-full flex justify-center">
+          {emailStatus === "sending" && (
+            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 animate-pulse">
+              <Send size={12} className="animate-spin" /> Logged details locally...
+            </span>
+          )}
+          {emailStatus === "sent" && (
+            <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+              <CheckCircle2 size={12} /> Date details sent to Aldrich! 🚀
+            </span>
+          )}
+          {emailStatus === "error" && (
+            <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+              <AlertCircle size={12} /> Status saved. Use button below.
+            </span>
+          )}
+        </div>
+
         <h1 className="text-3xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">Yay! See you! ❤️</h1>
         
         <div className="space-y-3 text-left mb-6">
@@ -62,15 +108,15 @@ export default function CelebrationStep({ dateInfo, onReset }) {
           </div>
         </div>
 
-        {/* Isang Solid at Prominenteng Google Calendar Action Button */}
+        {/* ETO ANG PINAKAMAHALAGANG BUTTON PARA SA PHONE WIDGET NIYA */}
         <div className="space-y-3 mb-4">
           <a 
             href={generateGoogleCalendarLink()} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:opacity-90 transition-all text-sm shadow-lg shadow-pink-500/20"
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:opacity-95 transition-all text-sm shadow-lg shadow-pink-500/20"
           >
-            <Plus size={18} /> Accept & Sync to Calendar
+            <Sparkles size={18} className="animate-bounce" /> Sync to Phone Widget & Calendar
           </a>
         </div>
 
