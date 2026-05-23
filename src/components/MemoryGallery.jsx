@@ -296,11 +296,13 @@ export default function MemoryGallery() {
                   }}
                 >
                   <option value="" disabled>-- Choose a designated date match --</option>
-                  {availableDates.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.date} · {d.place || "Unnamed Location"} ({d.status})
-                    </option>
-                  ))}
+                  {availableDates
+                    .filter((d) => d.status !== "cancelled")
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.date} · {d.place || "Unnamed Location"} ({d.status})
+                      </option>
+                    ))}
                   <option value="new_standalone">+ Create brand new manual gallery spot</option>
                 </select>
               </div>

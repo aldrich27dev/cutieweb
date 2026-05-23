@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Lock, AlertCircle, CheckCircle2, ShieldAlert, Info } from "lucide-react";
 
 export default function QuizStep({ onNext }) {
-  const CORRECT_PIN = "111826"; 
+  const CORRECT_PIN = "111825"; 
   const MAX_ATTEMPTS = 6;
   const LOCKOUT_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
 

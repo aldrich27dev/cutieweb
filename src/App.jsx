@@ -1,5 +1,6 @@
 // App.jsx
 import { useState } from "react";
+import MusicPlayer from "./components/MusicPlayer";
 import QuizStep from "./components/QuizStep"; // Siguraduhin ang tamang path
 import Dashboard from "./components/Dashboard";
 import DateStep from "./components/DateStep";
@@ -58,6 +59,8 @@ export default function App() {
     }
   };
 
+  const MUSIC_URL = "https://dn711101.ca.archive.org/0/items/benbenarawaraw/Ben%26Ben%20-%20Araw-Araw.mp3";
+
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(236,72,153,0.16),_transparent_34%),linear-gradient(180deg,_#020617_0%,_#0f172a_100%)] text-slate-100">
       <FloatingHearts />
@@ -67,6 +70,8 @@ export default function App() {
         {screen === "quiz" && (
           <QuizStep onNext={() => setScreen("dashboard")} />
         )}
+
+        <MusicPlayer url={MUSIC_URL} />
 
         {screen === "dashboard" && (
           <Dashboard 
